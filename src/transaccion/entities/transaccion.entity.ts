@@ -17,5 +17,5 @@ export class Transaccion {
     @Column()
     valor:number;
     @Column()
-    fecha:Date;
+    fecha: Date;
 }
