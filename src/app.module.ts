@@ -9,10 +9,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { CuentaModule } from './cuenta/cuenta.module';
 import { TransaccionModule } from './transaccion/transaccion.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
     TypeOrmModule.forRoot(config),
+    ScheduleModule.forRoot(),
     AuthModule, CuentaModule, TransaccionModule
   ],
   controllers: [AppController],

@@ -18,7 +18,7 @@ export class AuthService {
         private readonly cuentaRepository: Repository<Cuenta>,
         private jwtService: JwtService,
     ) {}
-    async ValidateUser(loginUserDto: LoginUserDto): Promise<{ access_token: string }> {
+    async validateUser(loginUserDto: LoginUserDto): Promise<{ access_token: string }> {
         const user = await this.userRepository.findOne({ where: { email: loginUserDto.email }});
         if (user) {
             if(await compare(loginUserDto.password, user.password)) { //contraseña correcta si es true

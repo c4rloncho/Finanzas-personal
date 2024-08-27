@@ -4,11 +4,12 @@ import { CuentaController } from './cuenta.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Cuenta } from './entities/cuenta.entity';
 import { User } from 'src/entities/user.entity';
-import { TransaccionModule } from 'src/transaccion/transaccion.module';
+import { Transaccion } from 'src/transaccion/entities/transaccion.entity';
 
 @Module({
-  imports:[TypeOrmModule.forFeature([Cuenta,User]),TransaccionModule],
+  imports:[TypeOrmModule.forFeature([Cuenta,User,Transaccion]),],
   controllers: [CuentaController],
   providers: [CuentaService],
+  exports: [CuentaService],
 })
 export class CuentaModule {}

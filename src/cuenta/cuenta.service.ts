@@ -2,13 +2,12 @@ import { HttpException, HttpStatus, Injectable, NotFoundException } from '@nestj
 import { CreateCuentaDto } from './dto/create-cuenta.dto';
 import { UpdateCuentaDto } from './dto/update-cuenta.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityNotFoundError, Repository } from 'typeorm';
+import { EntityManager, EntityNotFoundError, Repository } from 'typeorm';
 import { User } from 'src/entities/user.entity';
 import { Cuenta } from './entities/cuenta.entity';
 import { agregarGastoDto } from './dto/agregar-gasto.dto';
-import { AddSaldoDto } from './dto/anhadir-saldo.dto';
-import { TransaccionService } from 'src/transaccion/transaccion.service';
 import { SaldoDto } from './dto/saldo.dto';
+import { Cron } from '@nestjs/schedule';
 
 @Injectable()
 export class CuentaService {
@@ -17,11 +16,28 @@ export class CuentaService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Cuenta)
     private readonly cuentaRepository: Repository<Cuenta>,
-    private transaccionService:TransaccionService,
   ){}
   create(createCuentaDto: CreateCuentaDto) {
     return 'This action adds a new cuenta';
   }
+  
+  async getCuentaByUser(idUser: number): Promise<Cuenta> {
+    try {
+        const cuenta = await this.cuentaRepository.findOneOrFail({
+            where: {
+                user: {
+                    id: idUser
+                }
+            },
+            relations: ['user']
+        });
+
+        return cuenta;
+    } catch (error) {
+        throw new NotFoundException(`No se encontró la cuenta para el usuario con ID ${idUser}`);
+    }
+}
+
 
   findAll() {
     return `This action returns all cuenta`;
@@ -43,43 +59,28 @@ export class CuentaService {
     }
 
   }
-    async agregarGasto(userId:number, {gasto,descripcion}: agregarGastoDto){
+    async agregarGasto(userId:number, gasto: number):Promise<Cuenta>{
       const user = await this.userRepository.findOneOrFail({
         where: { id: userId },
         relations:['cuenta'],
       });
       const cuenta = user.cuenta;
-      if (cuenta.saldo < gasto) {
-        throw new HttpException(
-          `Saldo insuficiente. Saldo actual: ${cuenta.saldo}`,
-          HttpStatus.BAD_REQUEST
-        );
-      }
       cuenta.saldo -= gasto;
-      //tengo que hacer la transaccion en este punto
-      await this.transaccionService.realizarTransaccion((-gasto),descripcion,cuenta);
-      await this.cuentaRepository.save(cuenta);
-      return { message: `gasto agregado correctamente  de ${gasto}`}; 
+
+      const cuentaSaved = await this.cuentaRepository.save(cuenta);
+      return cuentaSaved;
     }
 
-    async agregarSaldo(userId: number, { saldo,descripcion }: AddSaldoDto) {
-      try {
-        const user = await this.userRepository.findOneOrFail({ 
-          where: { id: userId },
-          relations: ['cuenta'], });
-        const cuenta = user.cuenta;
-        cuenta.saldo += saldo;
-        //registrar saldo
-        await this.transaccionService.realizarTransaccion(saldo,descripcion,cuenta);
-        await this.cuentaRepository.save(cuenta);
-        return { message: 'Saldo agregado correctamente' };
-      } catch (error) {
-        console.error('Error al agregar saldo:', error);
-        throw new HttpException(
-          'Error al agregar saldo. Por favor, inténtalo de nuevo más tarde.',
-          HttpStatus.INTERNAL_SERVER_ERROR
-        );
+    async agregarSaldo(userId: number, monto: number, entityManager?: EntityManager): Promise<Cuenta> {
+      const manager = entityManager || this.cuentaRepository.manager;
+      
+      const cuenta = await manager.findOne(Cuenta, { where: { user: { id: userId } } });
+      if (!cuenta) {
+        throw new NotFoundException(`Cuenta para el usuario con ID ${userId} no encontrada`);
       }
+  
+      cuenta.saldo += monto;
+      return manager.save(Cuenta, cuenta);
     }
 
   findOne(id: number) {
@@ -92,5 +93,21 @@ export class CuentaService {
 
   remove(id: number) {
     return `This action removes a #${id} cuenta`;
+  }
+
+  async validarSaldoSuficiente(idUser:number,monto:number){
+    const user = await this.userRepository.findOne({where:{id:idUser},relations:['cuenta']})
+    if(!user){
+      throw new NotFoundException('usuario no encontrado')
+    }
+    const saldoUser = user.cuenta.saldo
+    //verificamos que el saldo del usuario es mayor al gasto que se quiere realizar
+      if (saldoUser < monto) {
+        throw new HttpException(
+          `Saldo insuficiente. Saldo actual: ${user.cuenta.saldo}`,
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    return true;
   }
 }

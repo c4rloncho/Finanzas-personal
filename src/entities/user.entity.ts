@@ -18,4 +18,5 @@ export class User {
     @OneToOne(()=>Cuenta, cuenta => cuenta.user)
     @JoinColumn()
     cuenta:Cuenta;
+
 }
