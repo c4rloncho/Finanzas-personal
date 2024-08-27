@@ -35,7 +35,8 @@ export class TransaccionController {
     @Query('limit') limit: number = 10,
     @Query('descripcion') descripcion?: string,
     @Query('fechaInicio') fechaInicio?: string,
-    @Query('fechaFin') fechaFin?: string
+    @Query('fechaFin') fechaFin?: string,
+    @Query('categoria') categoriaNombre?: string
   ): Promise<{
     data: TransaccionDto[],
     total: number,
@@ -43,13 +44,18 @@ export class TransaccionController {
     lastPage: number
   }> {
     const userId = req.user.id;
+    const filters = {
+      descripcion,
+      fechaInicio: fechaInicio ? new Date(fechaInicio) : undefined,
+      fechaFin: fechaFin ? new Date(fechaFin) : undefined,
+      categoriaNombre
+    };
+
     return this.transaccionService.getTransaccionesByUserPaginated(
       userId,
       page,
       limit,
-      descripcion,
-      fechaInicio ? new Date(fechaInicio) : undefined,
-      fechaFin ? new Date(fechaFin) : undefined
+      filters
     );
   }
 
@@ -88,7 +94,6 @@ export class TransaccionController {
   @Post('/crear-categoria')
   @UseGuards(AuthGuard('jwt'))
   async createCategoria(@Request() req, @Body() createCategoriaDto: CreateCategoriaDto) {
-    // Asumimos que el ID del usuario está disponible en req.user.id después de la autenticación
     const userId = req.user.id;
     return this.transaccionService.createCategoria(createCategoriaDto, userId);
   }

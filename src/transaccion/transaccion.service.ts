@@ -1,7 +1,7 @@
-    import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+    import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
     import { TipoTransaccion, Transaccion } from './entities/transaccion.entity';
     import { InjectRepository } from '@nestjs/typeorm';
-    import { Between, Connection, EntityNotFoundError, ILike, In, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
+    import { Between, Connection, EntityNotFoundError, FindOptionsWhere, ILike, In, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
     import { User } from 'src/entities/user.entity';
     import { SchedulerRegistry } from '@nestjs/schedule';
     import { CronJob } from 'cron';
@@ -14,6 +14,14 @@ import { CreateTransaccionDto } from './dto/create-transaccion.dto';
 import { CategoriaDto } from './dto/categoria.dto';
 import { CreateCategoriaDto } from './dto/crear-categoria.dto';
 
+
+
+interface TransactionFilters {
+  descripcion?: string;
+  fechaInicio?: Date;
+  fechaFin?: Date;
+  categoriaNombre?: string;
+}
     @Injectable()
     export class TransaccionService {
       constructor(
@@ -79,7 +87,7 @@ import { CreateCategoriaDto } from './dto/crear-categoria.dto';
       where: { id: idUser },
       relations: ['cuenta']
     });
-    const categoria = await this.categoriaRepository.findOne({where:{nombre:datos.categoria}})
+    const categoria = await this.categoriaRepository.findOne({where:{nombre:datos.categoria.nombre}})
     if (!user) {
       throw new NotFoundException('Usuario no encontrado');
     }
@@ -230,61 +238,88 @@ import { CreateCategoriaDto } from './dto/crear-categoria.dto';
       return {nuevoSaldo: cuentaActualizada.saldo };
     });
   }
-
+//buscar con filtros
   async getTransaccionesByUserPaginated(
     userId: number,
     page: number = 1,
     limit: number = 10,
-    descripcion?: string,
-    fechaInicio?: Date,
-    fechaFin?: Date
+    filters: {
+      descripcion?: string,
+      fechaInicio?: Date,
+      fechaFin?: Date,
+      categoriaNombre?: string
+    }
   ): Promise<{ data: TransaccionDto[], total: number, page: number, lastPage: number }> {
     try {
-      const user = await this.userRepository.findOneOrFail({
-        where: { id: userId },
-        relations: ['cuenta'],
-      });
-
-      let whereClause: any = {
-        cuenta: { id: user.cuenta.id },
-      };
-
-      if (descripcion) {
-        whereClause.descripcion = ILike(`%${descripcion}%`);
-      }
-
-      if (fechaInicio && fechaFin) {
-        whereClause.fecha = Between(fechaInicio, fechaFin);
-      }
-
-      const [transacciones, total] = await this.transaccionRepository.findAndCount({
-        where: whereClause,
-        relations: ['categoria'],
-        order: {
-          fecha: 'DESC',
-        },
-        skip: (page - 1) * limit,
-        take: limit,
-      });
-
-      // Mapear las transacciones al DTO
+      const user = await this.findUserWithAccount(userId);
+      const whereClause = await this.buildWhereClause(user.cuenta.id, filters);
+      const [transacciones, total] = await this.fetchTransacciones(whereClause, page, limit);
       const data = transacciones.map(this.mapTransaccionToDto);
-
-      // Calcular la última página
       const lastPage = Math.ceil(total / limit);
 
-      return {
-        data,
-        total,
-        page,
-        lastPage,
-      };
+      return { data, total, page, lastPage };
     } catch (error) {
-      if (error instanceof Error && error.name === 'EntityNotFoundError') {
-        throw new NotFoundException('Usuario no encontrado');
+      this.handleError(error);
+    }
+  }
+
+  private async findUserWithAccount(userId: number): Promise<User> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['cuenta'],
+    });
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+    return user;
+  }
+
+  private async buildWhereClause(
+    cuentaId: number,
+    filters: TransactionFilters
+  ): Promise<FindOptionsWhere<Transaccion>> {
+    const whereClause: FindOptionsWhere<Transaccion> = {
+      cuenta: { id: cuentaId }
+    };
+
+    if (filters.descripcion) {
+      whereClause.descripcion = ILike(`%${filters.descripcion}%`);
+    }
+
+    if (filters.fechaInicio && filters.fechaFin) {
+      whereClause.fecha = Between(filters.fechaInicio, filters.fechaFin);
+    }
+
+    if (filters.categoriaNombre) {
+      const categoria = await this.categoriaRepository.findOne({
+        where: { nombre: filters.categoriaNombre }
+      });
+      if (categoria) {
+        whereClause.categoria = { id: categoria.id };
+      } else {
+        whereClause.categoria = { id: -1 };
       }
+    }
+
+    return whereClause;
+  }
+  private async fetchTransacciones(whereClause: any, page: number, limit: number): Promise<[Transaccion[], number]> {
+    return await this.transaccionRepository.findAndCount({
+      where: whereClause,
+      relations: ['categoria'],
+      order: { fecha: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+  }
+
+
+  private handleError(error: any): never {
+    if (error instanceof NotFoundException) {
       throw error;
     }
+    // Registra el error aquí si es necesario
+    throw new Error('Ocurrió un error al procesar la transacción');
   }
 
   async getTransaccionesByUserMonth(
@@ -410,12 +445,29 @@ import { CreateCategoriaDto } from './dto/crear-categoria.dto';
   async createCategoria(createCategoriaDto: CreateCategoriaDto, userId: number): Promise<Categoria> {
     const { nombre, color } = createCategoriaDto;
     
+    // Buscar la cuenta asociada al usuario
+    const cuenta = await this.cuentaRepository.findOne({ where: { id:userId } });
+    if (!cuenta) {
+      throw new NotFoundException('No se encontró una cuenta asociada a este usuario');
+    }
+
     const categoria = this.categoriaRepository.create({
       nombre,
       color,
+      cuenta // Asociamos la categoría a la cuenta
     });
-    
 
-    return this.categoriaRepository.save(categoria);
+    try {
+      const savedCategoria = await this.categoriaRepository.save(categoria);
+      
+
+
+      return savedCategoria;
+    } catch (error) {
+      if (error.code === '23505') { // Código de error de PostgreSQL para violación de unicidad
+        throw new ConflictException(`Ya existe una categoría con el nombre "${nombre}" en esta cuenta`);
+      }
+      throw new InternalServerErrorException('Error al crear la categoría');
+    }
   }
 }

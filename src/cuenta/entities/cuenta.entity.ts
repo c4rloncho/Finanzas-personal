@@ -1,4 +1,5 @@
 import { User } from "src/entities/user.entity";
+import { Categoria } from "src/transaccion/entities/category.entity";
 import { Transaccion } from "src/transaccion/entities/transaccion.entity";
 import { Column, Double, Entity, JoinColumn, ManyToMany, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
 @Entity()
@@ -15,4 +16,6 @@ export class Cuenta {
     @OneToMany(()=>Transaccion, transaccion => transaccion.cuenta)
     transacciones: Transaccion[];
 
+    @OneToMany(()=>Categoria, categoria => categoria.cuenta)
+    categorias:Categoria[]
 }
