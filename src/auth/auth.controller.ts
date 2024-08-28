@@ -17,14 +17,15 @@ export class AuthController {
     ) {
       const result = await this.authService.validateUser(loginUserDto);
       
-      // Configurar la cookie
       res.cookie('access_token', result.access_token, {
         httpOnly: true,
         secure: process.env.NODE_ENV !== 'development', // true en producción
-        sameSite: 'none',
+        sameSite: process.env.NODE_ENV === 'development' ? 'lax' : 'none',
+        domain: process.env.NODE_ENV === 'development' ? 'localhost' : '.adaptable.app',
+        path: '/',
         maxAge: 24 * 60 * 60 * 1000, // 1 día
       });
-      // No devolver el token en la respuesta
+    
       return { success: true };
     }
 
