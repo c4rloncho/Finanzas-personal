@@ -9,5 +9,4 @@ export class RegisterUserDto {
     @IsNotEmpty()
     @MinLength(7)
     password: string;
-    rut:string;
 }

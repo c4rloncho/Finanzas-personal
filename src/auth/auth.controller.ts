@@ -41,11 +41,11 @@ export class AuthController {
       return req.user;
     }   
 
-    // @UsePipes(new ValidationPipe({ transform: true }))
-    // @Post('register')
-    // async register(@Body() registerUserDto: RegisterUserDto) {
-    //   return await this.authService.register(registerUserDto);
-    // }
+    @UsePipes(new ValidationPipe({ transform: true }))
+    @Post('register')
+    async register(@Body() registerUserDto: RegisterUserDto) {
+      return await this.authService.create(registerUserDto);
+    }
 
     @Post('logout')
     @HttpCode(HttpStatus.OK)

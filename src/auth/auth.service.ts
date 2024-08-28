@@ -30,7 +30,7 @@ export class AuthService {
         }
         throw new NotFoundException('Usuario no encontrado');
     }
-    async create({name,email,password,rut }: RegisterUserDto): Promise<User> {
+    async create({name,email,password }: RegisterUserDto): Promise<User> {
         const user = await this.userRepository.findOne({ where: { email }});
         if (!name || !email || !password) {
             throw new BadRequestException('Todos los campos son obligatorios');
