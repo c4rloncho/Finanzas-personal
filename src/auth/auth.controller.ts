@@ -24,7 +24,6 @@ export class AuthController {
         sameSite: 'none',
         maxAge: 24 * 60 * 60 * 1000, // 1 día
       });
-  
       // No devolver el token en la respuesta
       return { success: true };
     }
