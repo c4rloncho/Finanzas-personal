@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards, Request, UsePipes, ValidationPipe, Res } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards, Request, UsePipes, ValidationPipe, Res, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
@@ -29,10 +29,13 @@ export class AuthController {
       return { success: true };
     }
 
+    
     @Get('check')
     @UseGuards(AuthGuard('jwt'))
-    checkAuth() {
-      return { isAuthenticated: true };
+    checkAuth(@Req() req) {
+      console.log('Cookie recibida:', req.headers.cookie);
+      console.log('Usuario autenticado:', req.user);
+      return { authenticated: true, user: req.user };
     }
 
     @UseGuards(AuthGuard('jwt'))
